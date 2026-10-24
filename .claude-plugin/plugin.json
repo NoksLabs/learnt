@@ -1,7 +1,7 @@
 {
   "name": "learnt",
-  "version": "0.1.0",
-  "description": "Learn how to build software while the AI writes the code you designed. Multi-agent port of VibeWise.",
+  "version": "0.2.0",
+  "description": "Learn how to build software while the AI writes the code you designed. Teaches system design, architecture, encoding, memory, DDD, concurrency and infra through your own project.",
   "author": { "name": "NoksLabs LTD", "email": "max@nokslabs.com" },
   "license": "MIT",
   "keywords": ["learning", "architecture", "engineering"]

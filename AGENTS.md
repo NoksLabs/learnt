@@ -11,8 +11,8 @@ skills. See `README.md` for the full picture.
 - `src/` — the logic, written with Effect 4. Review and edit this, never the bundles.
 - `skills/learnt/scripts/learnt.mjs`, `adapters/pi/learnt.js`,
   `adapters/opencode/learnt.js` — generated bundles, committed. Rebuild, don't hand-edit.
-- `skills/` — Agent Skills (`SKILL.md`). `behavior.md`, `onboarding.md` and
-  `state-templates.md` are the original VibeWise text; keep edits minimal.
+- `skills/` — Agent Skills (`SKILL.md`). Guides are terse for agents; text the
+  operator sees must stay plain and clear.
 - `.claude-plugin/`, `hooks/hooks.json` — Claude Code plugin and marketplace.
 - `src/install.ts` — per-agent installer.
 
@@ -36,9 +36,9 @@ source. `bun run check` fails if a committed bundle differs from a fresh build.
 ## Rules
 
 - Make the smallest change that solves the task; match the surrounding style.
-- Keep the security properties listed in `README.md` (tracked notes not
-  auto-loaded, bounded state search, single-quoted shell paths, no symlinked
-  state, confirmed resets with backups). Add a test when touching them.
+- No code comments.
+- Keep the safety rules listed in `README.md`. Add a test when touching them.
+- Tests state why the behaviour matters in their names.
 - Restoration messages point to note files; never copy note contents into them.
 - Skills must stay agent-neutral: name tools by role, as in the table in
   `skills/learnt/SKILL.md`.

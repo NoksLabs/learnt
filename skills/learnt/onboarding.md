@@ -1,63 +1,72 @@
 # Onboarding
 
-Guide one step at a time. Reuse answers already given; don't dump a questionnaire.
-If the profile says `Onboarding reset: pending`, reuse only answers given after
-that reset. Keep this marker while onboarding is incomplete; remove it on completion.
-Don't restore previous preferences or understanding from conversation or backups.
-For onboarding choices, call the native question tool with exactly one question, 2–4 short options,
-brief descriptions, a header of at most 12 characters, and single selection.
-Use its native keyboard picker, not a printed imitation. If unavailable, ask one
-plain-text question. Open-ended answers belong in chat.
+Goal: know operator well enough to teach them, not fill a form.
+One question per turn. Reuse anything already said. Never dump list.
+Picker rules: one question, 2–4 short options + one-line descriptions, header ≤12 chars, single select unless noted. Native picker, not printed copy. No picker → plain text, numbered.
+Open answers → chat text.
 
-Briefly explain: learning comes first. Ask for their approach, then give feedback,
-explain unfamiliar concepts, and ask follow-ups where needed. Their reasoning shapes
-the design; AI writes the agreed implementation. Suggestions aren't an automatic next step.
-Notes live in .learnt/. Recommend ignoring that directory in Git. Don't
-change .gitignore unless requested; announce the edit first.
+`Onboarding reset: pending` in operator.md → only answers given after reset count. Keep marker until done; remove on completion. Don't pull old answers from chat or backups.
 
-## Project
+## Open with
 
-Unless already answered, first ask “What are we doing?” using a native picker:
-New project / Existing repo / Known project. Don't infer the answer from an empty
-folder. Wait for each answer before the next question.
+Two sentences max: operator designs, you coach + explain + write agreed code; notes live in `.learnt/`, best kept out of Git. Don't touch `.gitignore` unless asked; announce edit first.
 
-- **New:** Ask what they're building if unknown. Mark proposed architecture as
-  proposed; don't invent a stack or existing components.
-- **Existing:** Inspect project guidance, entry points, dependencies, storage,
-  integrations, and deployment configuration. Avoid secrets and generated files.
-  Save a small evidence-based map and show a concise flow with unknowns. Then ask
-  codebase familiarity (New / A little experience / Know it well), followed by
-  learning scope (Whole system / Parts we touch / A mix), in separate pickers.
-- **Known:** Ask architecture familiarity if unknown. Inspect enough to maintain
-  the map, without unnecessary introductory teaching.
+## Questions
 
-## Learner
+Order below. Skip any already answered. "Quick start" → ask only 1, 3, 5; defaults for rest; mark unknown `Not specified`.
 
-Ask only what's unknown, one question at a time:
+1. **Bench** — "What are we working on?" Picker:
+   - Fresh idea — nothing built yet.
+   - Repo I have — code exists, new to Learnt.
+   - Repo we mapped — Learnt notes existed here before.
+   Never guess from empty folder.
+2. **Role** — "What does your day-to-day look like?" Picker:
+   - Learning to code — student, bootcamp, self-taught.
+   - Ship features — frontend, backend, mobile, full stack.
+   - Run systems — infra, ops, data, platform.
+   - Lead or found — tech lead, founder, manager.
+3. **Experience** — "How far along are you with code?" Picker:
+   - Starting out — maps to `Beginner`.
+   - Ship with help — maps to `Intermediate`.
+   - Ship solo — maps to `Advanced`.
+   - Design for others — maps to `Expert`.
+   Self-report only. Not demonstrated skill.
+4. **Motive** — "What should this get you?" Picker:
+   - Grow at work — handle bigger tasks, own decisions.
+   - Own product — build and run something real.
+   - Interviews — system design + architecture rounds.
+   - Curiosity — understand how things really work.
+5. **Focus** — "Which areas do you want to get strong in?" Picker, multi-select:
+   - Design + architecture — system design, boundaries, DDD, vertical slices.
+   - Data + memory — encoding/decoding, serialization, memory management.
+   - Concurrency — races, locks, async, queues.
+   - Infra — deploys, networking, scaling, observability.
+   Free text add-ons welcome (security, testing, ...). Each → track in curriculum.md.
+6. **Style** — "When something new comes up, what lands best?" Picker:
+   - Picture first — everyday example, then real term.
+   - Code first — show code, then why.
+   - Diagram first — boxes and arrows.
+   - Mix — vary by topic.
+   Recipe in topics.md still applies; style picks lead beat.
+7. **Already know** — "Anything you know well so I skip basics?" Open text. Record as self-reported, not solid.
+8. **Stack** — only if stack chosen. "Which tools here are new to you?" Open text, per tool.
+9. **Setup** — Picker:
+   - Defaults — Normal checkpoints, open questions, AI writes code.
+   - Tune it — pick pace, question style, who codes.
+   Tune → three pickers, one each:
+   - Checkpoints: Light / Normal / Frequent.
+   - Questions: Open / Multiple choice / Mixed.
+   - Coding: AI writes / Mixed / I write more.
+10. **Friction** — optional, ask only if time feels right: "Anything that makes explanations annoying for you?" Open text.
 
-- Programming experience: Beginner / Intermediate / Advanced.
-- Stack familiarity: Beginner / Intermediate / Advanced. Defer if
-  there is no chosen stack; accept per-technology details in free text.
-  Existing levels remain valid: New means Beginner; Some experience or Comfortable
-  mean Intermediate. Don't repeat onboarding just to update a label.
-- Goal: for a beginner starting a new project, default to understanding the project
-  end to end unless they already gave another goal. Say “I'll guide you through
-  how this project works end to end as we build it.” Record this as a default;
-  don't ask them to define a learning or capability goal. They can change it later.
-  For other learners, ask about their learning focus only if it isn't already clear.
-- Preferences, a native picker:
-  - Use defaults — Reason through each meaningful decision first; AI writes code.
-  - Customize — Adjust frequency, question style, or who writes the code.
+## Bench follow-ups
 
-Defaults means Normal checkpoints and open-ended reasoning; finish setup immediately.
-Customize asks frequency (Light / Normal /
-Frequent), reasoning style (Open-ended / Multiple choice / Mixed), and coding
-preference (AI writes / A mix / More hands-on), each in a separate picker. Reasoning
-style doesn't change setup pickers. A longer-term capability goal is optional;
-don't add a separate question if their goal already covers it.
+- **Fresh idea**: ask what it should do if unknown. Mark any structure `proposed`. Don't invent stack or parts.
+- **Repo I have**: read project docs, entry points, deps, storage, integrations, deploy config. Skip secrets + generated files. Write small evidence-based system.md, show short flow with `?` for unknowns. Then picker "How well do you know this codebase?" (New to it / Somewhat / Know it well), then picker "What should I teach?" (Whole system / Parts we touch / Both).
+- **Repo we mapped**: inspect enough to refresh system.md. No intro lessons.
 
-If they want to skip setup, use defaults, mark unknown answers Not specified, and
-proceed. Save known answers with state-templates.md and `Onboarding: incomplete`
-plus a short Remaining onboarding list between turns. Mark complete when ready.
-Self-reported experience isn't demonstrated understanding. Summarize preferences
-in one sentence, then begin the build task with the learning loop in behavior.md.
+## Finish
+
+Save after each answer with notes.md templates. Between turns: `Onboarding: incomplete` + `Open questions:` line.
+Done → `Onboarding: complete`, seed curriculum.md tracks from Focus at `unseen` (or `introduced` for Already know).
+One-sentence summary of how you'll work together. Start operator's task with teaching.md loop.

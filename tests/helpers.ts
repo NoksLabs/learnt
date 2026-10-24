@@ -6,13 +6,13 @@ import { afterEach } from "bun:test"
 
 export const ROOT = path.resolve(import.meta.dir, "..")
 export const CLI = path.join(ROOT, "skills/learnt/scripts/learnt.mjs")
+export const GUIDE = path.join(ROOT, "skills/learnt/SKILL.md")
 
 const temps: Array<string> = []
 afterEach(() => {
   for (const dir of temps.splice(0)) fs.rmSync(dir, { recursive: true, force: true })
 })
 
-/** A fresh temporary directory (real path), removed after each test. */
 export const tempDir = (prefix: string) => {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)))
   temps.push(dir)
@@ -26,11 +26,24 @@ export const write = (file: string, text: string | Uint8Array) => {
 
 export const read = (file: string) => fs.readFileSync(file, "utf8")
 
-/** Map of file name to bytes for every entry in a directory. */
 export const snapshot = (dir: string) =>
   Object.fromEntries(fs.readdirSync(dir).sort().map((name) => [name, fs.readFileSync(path.join(dir, name)).toString("hex")]))
 
-/** Run the bundled CLI with a controlled environment. */
+export const NOTE_TEXT: Readonly<Record<string, string>> = {
+  "operator.md": "# Operator\n\nLearning mode: active\nOnboarding: complete\n\nRole: Ship features\nLead with: Picture\n",
+  "curriculum.md": "# Curriculum\n\n## Concurrency\n- Race condition — level: solid\n  Evidence: spotted double sell on checkout\n",
+  "journal.md": "# Journal\n\n## Open checkpoint\nType: Build go\nProposal: row lock on stock\n",
+  "system.md": "# System\n\nPOST /checkout -> orders -> emails queue\n"
+}
+
+export const notes = (dir: string, mode: "active" | "paused" = "active") => {
+  const state = path.join(dir, ".learnt")
+  for (const [name, text] of Object.entries(NOTE_TEXT)) {
+    write(path.join(state, name), name === "operator.md" ? text.replace("active", mode) : text)
+  }
+  return state
+}
+
 export const cli = (args: Array<string>, options: { home: string; input?: string; cwd?: string }) => {
   const result = spawnSync("node", [CLI, ...args], {
     input: options.input ?? "", encoding: "utf8", cwd: options.cwd ?? options.home, timeout: 10_000,

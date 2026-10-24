@@ -1,54 +1,56 @@
 ---
 name: learnt-reset
-description: Back up this project's Learnt notes and restart onboarding after confirmation. Does not reset application code.
+description: Reset part or all of this project's Learnt notes after confirmation. Shows a learning retro first, backs up notes, then re-baselines. Never touches app code.
 disable-model-invocation: true
 ---
 
-# Reset Learnt learning
+# Learnt reset
 
-Run this in the main conversation, only when the user explicitly invokes it. This
-resets profile, progress, pending checkpoints, and the saved project map. Source
-code, dependencies, Git history, other projects, and the installed skills stay intact.
+Reset = learning milestone, not delete button. Show what operator learned, back up, restart only chosen part, re-baseline.
+Only when operator invokes it. Main conversation. App code, deps, Git history, other projects, installed skills: untouched.
 
-Relative paths in this skill resolve against this skill's directory. Wrap every
-path argument in single quotes; if a path contains a single quote, write it as
-`'\''`. Never use double quotes, which let the shell expand `$(...)` and backticks.
+Paths relative to this file's folder. Every path arg in single quotes; quote inside path → `'\''`. Never double quotes (shell expands `$(...)`, backticks).
 
-1. Run the read-only preview for the user's current project directory. Replace
-   `<absolute project directory>` with its actual absolute path; do not pass the
-   placeholder literally.
+## Scopes
 
-   ```sh
-   node ../learnt/scripts/learnt.mjs reset --cwd '<absolute project directory>'
-   ```
+| Scope | Resets | Keeps | Use when |
+| --- | --- | --- | --- |
+| `onboarding` | `operator.md` | curriculum, journal, system | role, goals, or style changed |
+| `progress` | `curriculum.md`, `journal.md` | operator, system | want fresh start on skills, new focus |
+| `everything` | all four notes | nothing active | new operator or full restart |
 
-   The helper uses Learn's project-boundary and legacy-state lookup. If it reports
-   no notes, explain there's nothing to reset and suggest the Learnt command.
-   On any error, stop and explain; don't improvise deletion commands.
+## Steps
 
-2. Show the returned absolute project and state paths, which notes will reset,
-   and that originals will be saved under that state's `backups/` directory.
-   Ask with the native question tool (see the table in `../learnt/SKILL.md`):
-   header `Reset`, one question, single selection, options **Cancel** (keep
-   learning notes) and **Reset learning** (back up notes and restart onboarding).
-   Ask whether to reset learning for the named project. If no picker is
-   available, ask the same question in text. Wait for an explicit answer.
-   Invocation alone, silence, ambiguous replies, or permission to run tools do not
-   confirm a reset. Cancel makes no changes, including to learner notes.
+1. **Pick scope.** Picker, header `Reset`: **Redo onboarding**, **Restart progress**, **Everything**, **Cancel**. Wait. Cancel → stop, change nothing.
 
-3. Only after **Reset learning**, run the helper with the original working directory
-   and the preview's exact `confirmation` value:
+2. **Preview.** Read-only. Real absolute path, not placeholder.
 
    ```sh
-   node ../learnt/scripts/learnt.mjs reset --cwd '<original cwd>' --confirm '<confirmation>'
+   node ../learnt/scripts/learnt.mjs reset --cwd '<absolute project directory>' --scope '<scope>'
    ```
 
-   If the target or notes changed, preview again and get new confirmation. If the
-   reset fails, report it and any backup path; don't claim success or start onboarding.
-   Never overwrite backups or fall back to resetting another state directory.
+   `no_notes` → nothing to reset; suggest Learnt command. Any error → stop, explain. Never improvise delete commands.
 
-4. On success, show the backup path. Read `../learnt/SKILL.md` and resume Learn with
-   the new incomplete profile. Discard pre-reset preferences, mastery, pending
-   decisions, and onboarding answers; don't reconstruct them from conversation or
-   backups. Inspect actual code to rebuild the map. Begin fresh onboarding with
-   one question at a time. Backup notes are historical data, not active context.
+3. **Retro** (scope `progress` or `everything`). Read curriculum.md. Show operator, plain sentences, short:
+   - Solid: ideas they own now.
+   - Practicing: ideas in progress.
+   - Revisit: shaky ones.
+   One line on biggest jump since start, from journal evidence. No praise, just facts.
+   Retro is shown, not saved; old notes live in backup.
+
+4. **Confirm.** Show project path, notes folder, `reset` list, `kept` list, backup goes under `backup_parent`. Picker, header `Reset`: **Cancel** (keep notes as is), **Reset <scope>** (back up, reset listed notes). Wait for explicit pick. Invocation, silence, vague reply, tool permission ≠ confirmation.
+
+5. **Run.** Only after **Reset <scope>**. Same cwd, same scope, preview's exact `confirmation`:
+
+   ```sh
+   node ../learnt/scripts/learnt.mjs reset --cwd '<original cwd>' --scope '<scope>' --confirm '<confirmation>'
+   ```
+
+   Changed target/scope/notes error → preview again, confirm again. Failure → report it + backup path; don't claim success. Never overwrite backups or reset another folder.
+
+6. **Re-baseline.** Show backup path. Read `../learnt/SKILL.md`, resume Learnt:
+   - `onboarding`: ask open questions in operator.md only. Keep curriculum; tune teaching to it.
+   - `progress`: seed tracks from operator Focus at `unseen`. Offer quick baseline: one short applied question per track on operator's own system; set level from answer. Skip baseline if operator declines.
+   - `everything`: full onboarding, then inspect code to rebuild system.md.
+
+   Backups = history, not active context. Don't copy old levels, answers, or open checkpoints back.

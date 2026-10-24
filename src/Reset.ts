@@ -1,43 +1,59 @@
-/** Preview by default; reset only a confirmed snapshot of local learning notes. */
 import { createHash } from "node:crypto"
 import * as path from "node:path"
 import { Data, Effect } from "effect"
 import { Files } from "./Files.ts"
-import { absoluteDirectory, stateDirectory } from "./State.ts"
+import { absoluteDirectory, CURRICULUM, JOURNAL, NOTES, OPERATOR, stateDirectory, SYSTEM } from "./State.ts"
 
 export class ResetError extends Data.TaggedError("ResetError")<{
   readonly message: string
 }> {}
 
-export const FRESH: Readonly<Record<string, string>> = {
-  "profile.md": "# Learner Profile\n\nLearning mode: active\nOnboarding: incomplete\n" +
-    "Onboarding reset: pending\n\n" +
-    "Remaining onboarding: Project situation, experience, stack familiarity, " +
-    "goals, and preferences.\n",
-  "progress.md": "# Learning Progress\n\nNo learning events recorded yet.\n",
-  "project-map.md": "# Project Map\n\nNot mapped yet. Inspect the current project.\n"
-}
-const NAMES = Object.keys(FRESH)
+export const SCOPES = {
+  onboarding: [OPERATOR],
+  progress: [CURRICULUM, JOURNAL],
+  everything: NOTES
+} as const satisfies Record<string, ReadonlyArray<string>>
+export type Scope = keyof typeof SCOPES
+export const SCOPE_NAMES = ["onboarding", "progress", "everything"] as const satisfies ReadonlyArray<Scope>
+
+export const fresh = (scope: Scope, day: string, backup: string): Readonly<Record<string, string>> => ({
+  [OPERATOR]: "# Operator\n\nLearning mode: active\nOnboarding: incomplete\nOnboarding reset: pending\n\n" +
+    "Open questions: bench, role, experience, motive, focus tracks, learning style, stack, pace.\n",
+  [CURRICULUM]: "# Curriculum\n\nNo tracks started. Seed tracks from the operator's focus.\n",
+  [JOURNAL]: `# Journal\n\n## ${day} Reset: ${scope}\n` +
+    `Old notes saved in ${backup}. History only: do not copy old levels or answers. ` +
+    "Re-check skills by asking.\n",
+  [SYSTEM]: "# System\n\nNot mapped yet. Inspect the project.\n"
+})
 
 export type ResetResult =
   | { readonly status: "no_notes"; readonly cwd: string }
   | {
     readonly status: "preview"
+    readonly scope: Scope
     readonly project: string
     readonly state: string
-    readonly files: ReadonlyArray<string>
+    readonly reset: ReadonlyArray<string>
+    readonly kept: ReadonlyArray<string>
     readonly backup_parent: string
     readonly confirmation: string
   }
-  | { readonly status: "reset"; readonly project: string; readonly state: string; readonly backup: string }
+  | {
+    readonly status: "reset"
+    readonly scope: Scope
+    readonly project: string
+    readonly state: string
+    readonly reset: ReadonlyArray<string>
+    readonly backup: string
+  }
 
-const snapshot = (cwd: string) =>
+const snapshot = (cwd: string, scope: Scope) =>
   Effect.gen(function*() {
     const files = yield* Files
     const state = yield* stateDirectory(cwd)
     if (state === undefined) return undefined
     const notes = new Map<string, Uint8Array>()
-    for (const name of NAMES) {
+    for (const name of NOTES) {
       const note = path.join(state, name)
       const kind = yield* files.kind(note)
       if (kind === "missing") continue
@@ -46,37 +62,38 @@ const snapshot = (cwd: string) =>
       }
       notes.set(name, yield* files.readBytes(note))
     }
-    // Include identity, missing files, and content so confirmation cannot drift
-    // to another project or silently discard notes updated by another session.
-    const digest = createHash("sha256").update(state)
-    for (const name of NAMES) {
+    const digest = createHash("sha256").update(JSON.stringify([state, scope]))
+    for (const name of NOTES) {
       const data = notes.get(name)
       digest.update(JSON.stringify([name, data === undefined ? null : Buffer.from(data).toString("hex")]))
     }
     return { state, notes, fingerprint: digest.digest("hex") }
   })
 
-export const reset = (rawCwd: string, confirmation?: string) =>
+export const reset = (rawCwd: string, scope: Scope, confirmation?: string) =>
   Effect.gen(function*() {
     const files = yield* Files
     const cwd = absoluteDirectory(rawCwd)
     if (cwd === undefined) {
       return yield* new ResetError({ message: "Use an existing absolute project working directory." })
     }
-    const before = yield* snapshot(cwd)
+    const before = yield* snapshot(cwd, scope)
     const notes = before?.notes.size ? before : undefined
     if (confirmation !== undefined && (notes === undefined || confirmation !== notes.fingerprint)) {
-      return yield* new ResetError({ message: "Target or notes changed. Preview and confirm again; nothing reset." })
+      return yield* new ResetError({ message: "Target, scope or notes changed. Preview and confirm again; nothing reset." })
     }
     if (notes === undefined) return { status: "no_notes", cwd } satisfies ResetResult
     const { state, fingerprint } = notes
+    const targets: ReadonlyArray<string> = SCOPES[scope]
     const backupParent = path.join(state, "backups")
     if (confirmation === undefined) {
       return {
         status: "preview",
+        scope,
         project: path.dirname(state),
         state,
-        files: [...notes.notes.keys()],
+        reset: targets.filter((name) => notes.notes.has(name)),
+        kept: [...notes.notes.keys()].filter((name) => !targets.includes(name)),
         backup_parent: backupParent,
         confirmation: fingerprint
       } satisfies ResetResult
@@ -87,19 +104,20 @@ export const reset = (rawCwd: string, confirmation?: string) =>
       return yield* new ResetError({ message: "Backup path must be a real directory; nothing reset." })
     }
     if (parentKind === "missing") yield* files.makeDirectory(backupParent, 0o700)
-    const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z")
-    const backup = yield* files.makeTempDirectory(path.join(backupParent, `reset-${stamp}-`))
+    const now = new Date().toISOString()
+    const stamp = now.replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z")
+    const backup = yield* files.makeTempDirectory(path.join(backupParent, `${scope}-${stamp}-`))
+    const replacements = fresh(scope, now.slice(0, 10), backup)
 
     yield* Effect.gen(function*() {
-      // Finish all backups and prepare replacements before touching active notes.
       for (const [name, data] of notes.notes) yield* files.writeBytes(path.join(backup, name), data)
-      for (const name of NAMES) {
-        yield* files.writeBytes(path.join(backup, `.new-${name}`), new TextEncoder().encode(FRESH[name]))
+      for (const name of targets) {
+        yield* files.writeBytes(path.join(backup, `.new-${name}`), new TextEncoder().encode(replacements[name]))
       }
-      if ((yield* snapshot(cwd))?.fingerprint !== fingerprint) {
+      if ((yield* snapshot(cwd, scope))?.fingerprint !== fingerprint) {
         return yield* new ResetError({ message: "Notes changed during backup; active notes were not reset." })
       }
-      for (const name of NAMES) yield* files.replace(path.join(backup, `.new-${name}`), path.join(state, name))
+      for (const name of targets) yield* files.replace(path.join(backup, `.new-${name}`), path.join(state, name))
     }).pipe(
       Effect.mapError((error) =>
         new ResetError({
@@ -108,5 +126,5 @@ export const reset = (rawCwd: string, confirmation?: string) =>
         })
       )
     )
-    return { status: "reset", project: path.dirname(state), state, backup } satisfies ResetResult
+    return { status: "reset", scope, project: path.dirname(state), state, reset: targets, backup } satisfies ResetResult
   })

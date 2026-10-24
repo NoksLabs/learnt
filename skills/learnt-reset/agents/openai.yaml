@@ -1,5 +1,5 @@
 interface:
   display_name: "Learnt reset"
-  short_description: "Back up Learnt notes and restart onboarding"
+  short_description: "Retro, back up, and reset part or all of Learnt notes"
 policy:
   allow_implicit_invocation: false
