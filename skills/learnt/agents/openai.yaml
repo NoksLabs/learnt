@@ -1,0 +1,5 @@
+interface:
+  display_name: "Learnt"
+  short_description: "Learning-first development: you design, the agent writes"
+policy:
+  allow_implicit_invocation: false

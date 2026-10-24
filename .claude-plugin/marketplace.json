@@ -1,0 +1,8 @@
+{
+  "name": "learnt",
+  "owner": { "name": "NoksLabs LTD", "email": "max@nokslabs.com" },
+  "metadata": { "description": "Learnt: learn how to build while AI writes the code." },
+  "plugins": [
+    { "name": "learnt", "source": "./", "description": "Learn how to build software while the AI writes the code." }
+  ]
+}

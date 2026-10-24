@@ -1,0 +1,17 @@
+{
+  "description": "Restore local Learnt learning context when a session starts or compacts.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact|fork",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/skills/learnt/scripts/learnt.mjs\" hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
