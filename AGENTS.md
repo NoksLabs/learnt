@@ -18,7 +18,8 @@ skills. See `README.md` for the full picture.
 
 ## Commands
 
-Use Bun.
+Use Bun. `just` wraps these: `just i`, `just ck`, `just b`, `just t`,
+`just check`, `just validate`, `just install <agents>`.
 
 ```sh
 bun install            # dev dependencies

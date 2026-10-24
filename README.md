@@ -124,6 +124,9 @@ the preview.
 
 ## Development
 
+`just` lists every recipe (`i`, `ck`, `b`, `t`, `check`, `validate`,
+`install`, `install-dry`, `uninstall`). The raw commands:
+
 ```sh
 bun run typecheck
 bun run build          # src/ -> the three committed bundles
