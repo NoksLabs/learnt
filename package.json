@@ -5,7 +5,17 @@
   "description": "Learning-first development for pi, omp, opencode, Codex and Claude Code.",
   "author": "NoksLabs LTD <max@nokslabs.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NoksLabs/learnt.git"
+  },
   "type": "module",
+  "bin": {
+    "learnt": "skills/learnt/scripts/learnt.mjs"
+  },
+  "engines": {
+    "node": "^24.22.1 || >=26.12.1"
+  },
   "keywords": [
     "pi-package"
   ],
@@ -23,19 +33,19 @@
     ]
   },
   "devDependencies": {
-    "@effect/platform-node": "4.0.0",
+    "@effect/platform-node": "4.0.6",
     "@types/bun": "1.4.2",
     "@types/node": "26.6.4",
-    "effect": "4.0.0",
+    "effect": "4.0.6",
     "typescript": "7.0.2"
   },
   "scripts": {
     "build": "bun run build:cli && bun run build:pi && bun run build:opencode",
-    "build:cli": "bun build src/cli.ts --target=node --format=esm --outfile=skills/learnt/scripts/learnt.mjs",
+    "build:cli": "bun build src/cli.ts --define LEARNT_VERSION=\"\\\"$npm_package_version\\\"\" --target=node --format=esm --outfile=skills/learnt/scripts/learnt.mjs && chmod +x skills/learnt/scripts/learnt.mjs",
     "build:pi": "bun build src/pi.ts --target=node --format=esm --outfile=adapters/pi/learnt.js",
     "build:opencode": "bun build src/opencode.ts --target=node --format=esm --outfile=adapters/opencode/learnt.js",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "check": "bun run typecheck && bun run build && git diff --exit-code -- skills/learnt/scripts adapters/pi adapters/opencode/learnt.js && bun test"
+    "check": "bun audit && bun run typecheck && bun run build && git diff --exit-code -- skills/learnt/scripts adapters/pi adapters/opencode/learnt.js && bun test"
   }
 }

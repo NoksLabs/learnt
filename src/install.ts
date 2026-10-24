@@ -1,11 +1,9 @@
-import { spawnSync } from "node:child_process"
-import * as fs from "node:fs"
-import * as os from "node:os"
-import * as path from "node:path"
-import { fileURLToPath } from "node:url"
-import { Effect, Option, Schema } from "effect"
+import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect"
+import { Argument, Command, Flag } from "effect/cli"
+import { ChildProcess, ChildProcessSpawner } from "effect/process"
+import { Files } from "./Files.ts"
+import { besideBundle } from "./Live.ts"
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const SKILLS = ["learnt", "learnt-reset"] as const
 const HOOK_MARKER = "/skills/learnt/scripts/learnt.mjs' hook"
 const STAMP = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "")
@@ -24,67 +22,72 @@ const HooksFile = Schema.fromJsonString(Schema.Struct({
 }))
 
 interface Options {
+  readonly root: string
   readonly home: string
   readonly dryRun: boolean
   readonly uninstall: boolean
 }
 
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`
-const present = (target: string) => {
-  try {
-    fs.lstatSync(target)
-    return true
-  } catch {
-    return false
-  }
-}
 
-const installer = ({ home, dryRun, uninstall }: Options) => {
-  const say = (message: string) => Effect.sync(() => console.log((dryRun ? "[dry run] " : "") + message))
-  const act = (message: string, run: () => void) =>
+const installer = Effect.fnUntraced(function*({ root: ROOT, home, dryRun, uninstall }: Options) {
+  const fs = yield* FileSystem.FileSystem
+  const path = yield* Path.Path
+  const files = yield* Files
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
+  const xdgConfigHome = yield* Effect.option(Config.String("XDG_CONFIG_HOME"))
+  const codexHomeEnv = yield* Effect.option(Config.String("CODEX_HOME"))
+  const present = files.exists
+  const say = (message: string) => Console.log((dryRun ? "[dry run] " : "") + message)
+  const act = (message: string, run: Effect.Effect<void, unknown>) =>
     Effect.gen(function*() {
       yield* say(message)
       if (dryRun) return
-      yield* Effect.try({
-        try: run,
-        catch: (cause) => new InstallError({ message: `${message}: ${String(cause)}` })
-      })
+      yield* Effect.mapError(run, (cause) => new InstallError({ message: `${message}: ${String(cause)}` }))
     })
 
   const command = (...args: [string, ...Array<string>]) =>
-    act(`$ ${args.join(" ")}`, () => {
-      const result = spawnSync(args[0], args.slice(1), { stdio: "inherit" })
-      if (result.error) throw new Error(`${args[0]} is not on PATH; install it first.`)
-      if (result.status !== 0) throw new Error(`exited with ${result.status}`)
-    })
+    act(
+      `$ ${args.join(" ")}`,
+      Effect.gen(function*() {
+        const status = yield* spawner.exitCode(
+          ChildProcess.make(args[0], args.slice(1), { stdin: "inherit", stdout: "inherit", stderr: "inherit" })
+        ).pipe(Effect.mapError(() => `${args[0]} is not on PATH; install it first.`))
+        if (status !== 0) return yield* Effect.fail(`exited with ${status}`)
+      })
+    )
 
   const backup = (target: string) =>
     Effect.gen(function*() {
-      if (!present(target)) return
+      if (!(yield* present(target))) return
       const relative = path.relative(home, target)
       const saved = path.join(home, ".learnt-install-backups", STAMP,
         relative.startsWith("..") ? target.slice(1) : relative)
-      if (present(saved)) return
-      yield* act(`back up ${target} -> ${saved}`, () => {
-        fs.mkdirSync(path.dirname(saved), { recursive: true })
-        fs.cpSync(target, saved, { recursive: true, verbatimSymlinks: true })
-      })
+      if (yield* present(saved)) return
+      yield* act(
+        `back up ${target} -> ${saved}`,
+        Effect.gen(function*() {
+          yield* fs.makeDirectory(path.dirname(saved), { recursive: true })
+          if ((yield* files.kind(target)) === "symlink") yield* fs.symlink(yield* fs.readLink(target), saved)
+          else yield* fs.copy(target, saved)
+        })
+      )
     })
 
   const remove = (target: string) =>
     Effect.gen(function*() {
-      if (!present(target)) return
+      if (!(yield* present(target))) return
       yield* backup(target)
-      yield* act(`remove ${target}`, () => fs.rmSync(target, { recursive: true }))
+      yield* act(`remove ${target}`, fs.remove(target, { recursive: true }))
     })
 
   const write = (target: string, text: string) =>
     Effect.gen(function*() {
       yield* backup(target)
-      yield* act(`write ${target}`, () => {
-        fs.mkdirSync(path.dirname(target), { recursive: true })
-        fs.writeFileSync(target, text)
-      })
+      yield* act(
+        `write ${target}`,
+        Effect.andThen(fs.makeDirectory(path.dirname(target), { recursive: true }), fs.writeFileString(target, text))
+      )
     })
 
   const steps: Record<Agent, Effect.Effect<void, InstallError>> = {
@@ -103,33 +106,39 @@ const installer = ({ home, dryRun, uninstall }: Options) => {
     omp: uninstall ? command("omp", "plugin", "uninstall", "learnt") : command("omp", "plugin", "link", ROOT),
 
     opencode: Effect.gen(function*() {
-      const config = path.join(process.env.XDG_CONFIG_HOME ?? path.join(home, ".config"), "opencode")
+      const config = path.join(Option.getOrElse(xdgConfigHome, () => path.join(home, ".config")), "opencode")
       const plugin = path.join(config, "plugins", "learnt.js")
       yield* remove(plugin)
       for (const name of SKILLS) yield* remove(path.join(config, "commands", `${name}.md`))
       if (uninstall) return
       const bundle = path.join(ROOT, "adapters/opencode/learnt.js")
-      yield* act(`link ${plugin} -> ${bundle}`, () => {
-        fs.mkdirSync(path.dirname(plugin), { recursive: true })
-        fs.symlinkSync(bundle, plugin)
-      })
+      yield* act(
+        `link ${plugin} -> ${bundle}`,
+        Effect.andThen(fs.makeDirectory(path.dirname(plugin), { recursive: true }), fs.symlink(bundle, plugin))
+      )
       for (const name of SKILLS) {
-        const template = fs.readFileSync(path.join(ROOT, "adapters/opencode/commands", `${name}.md`), "utf8")
+        const template = yield* fs.readFileString(path.join(ROOT, "adapters/opencode/commands", `${name}.md`)).pipe(
+          Effect.mapError((cause) => new InstallError({ message: String(cause) }))
+        )
         yield* write(path.join(config, "commands", `${name}.md`), template.replaceAll("{{LEARNT_ROOT}}", ROOT))
       }
     }),
 
     codex: Effect.gen(function*() {
-      const codexHome = process.env.CODEX_HOME ?? path.join(home, ".codex")
+      const codexHome = Option.getOrElse(codexHomeEnv, () => path.join(home, ".codex"))
       for (const name of SKILLS) {
         const target = path.join(codexHome, "skills", name)
         yield* remove(target)
         if (uninstall) continue
-        yield* act(`copy ${path.join(ROOT, "skills", name)} -> ${target}`, () => {
-          fs.cpSync(path.join(ROOT, "skills", name), target, { recursive: true })
-          const skill = path.join(target, "SKILL.md")
-          fs.writeFileSync(skill, fs.readFileSync(skill, "utf8").replace(/^disable-model-invocation:.*\n/m, ""))
-        })
+        const skill = path.join(target, "SKILL.md")
+        yield* act(
+          `copy ${path.join(ROOT, "skills", name)} -> ${target}`,
+          Effect.gen(function*() {
+            yield* fs.copy(path.join(ROOT, "skills", name), target)
+            const text = yield* fs.readFileString(skill)
+            yield* fs.writeFileString(skill, text.replace(/^disable-model-invocation:.*\n/m, ""))
+          })
+        )
       }
       yield* codexHook(path.join(codexHome, "hooks.json"))
     })
@@ -137,7 +146,9 @@ const installer = ({ home, dryRun, uninstall }: Options) => {
 
   const codexHook = (file: string) =>
     Effect.gen(function*() {
-      const raw = present(file) ? fs.readFileSync(file, "utf8") : "{}"
+      const raw = (yield* present(file))
+        ? yield* fs.readFileString(file).pipe(Effect.mapError((cause) => new InstallError({ message: String(cause) })))
+        : "{}"
       if (Option.isNone(Schema.decodeUnknownOption(HooksFile)(raw))) {
         return yield* new InstallError({ message: `${file} is not a hooks file this installer understands; edit it by hand.` })
       }
@@ -167,30 +178,62 @@ const installer = ({ home, dryRun, uninstall }: Options) => {
     })
 
   return steps
-}
-
-const usage = "usage: bun src/install.ts [--uninstall] [--dry-run] (all | claude codex opencode pi omp ...)"
-
-const main = Effect.gen(function*() {
-  const args = process.argv.slice(2)
-  const homeIndex = args.indexOf("--home")
-  const home = homeIndex >= 0 ? args[homeIndex + 1] ?? "" : os.homedir()
-  const names = args.filter((arg, index) => !arg.startsWith("--") && (homeIndex < 0 || index !== homeIndex + 1))
-  const unknown = names.filter((name) => name !== "all" && !AGENTS.includes(name as Agent))
-  if (names.length === 0 || unknown.length > 0 || home === "") {
-    return yield* new InstallError({ message: unknown.length ? `unknown agent: ${unknown.join(", ")}\n${usage}` : usage })
-  }
-  const steps = installer({ home, dryRun: args.includes("--dry-run"), uninstall: args.includes("--uninstall") })
-  const selected = names.includes("all") ? AGENTS : AGENTS.filter((agent) => names.includes(agent))
-  for (const agent of selected) {
-    yield* Effect.sync(() => console.log(`== ${agent}`))
-    yield* steps[agent]
-  }
 })
 
-process.exitCode = await Effect.runPromise(
-  main.pipe(
-    Effect.as(0),
-    Effect.catch((error) => Effect.sync(() => (console.error(error.message), 1)))
-  )
+const NODE = "^24.22.1 || >=26.12.1"
+
+const patchedNode = (version: string) => {
+  const [major = 0, minor = 0, patch = 0] = version.split(".").map(Number)
+  const atLeast = (m: number, p: number) => minor > m || (minor === m && patch >= p)
+  return (major === 24 && atLeast(22, 1)) || (major === 26 && atLeast(12, 1)) || major > 26
+}
+
+const run = (uninstall: boolean) =>
+  ({ agents, dryRun, home }: {
+    readonly agents: ReadonlyArray<Agent | "all">
+    readonly dryRun: boolean
+    readonly home: Option.Option<string>
+  }) =>
+    Effect.gen(function*() {
+      const fs = yield* FileSystem.FileSystem
+      const path = yield* Path.Path
+      if (!patchedNode(process.versions.node)) {
+        return yield* new InstallError({
+          message: `Learnt needs Node.js ${NODE} (fixes CVE-2026-111497); this is ${process.versions.node}.`
+        })
+      }
+      const root = yield* besideBundle("..", "..", "..")
+      if (!(yield* fs.exists(path.join(root, ".claude-plugin", "marketplace.json")))) {
+        return yield* new InstallError({ message: `Run install from the Learnt checkout; ${root} is not one.` })
+      }
+      const fallback = yield* Effect.orElseSucceed(Config.String("HOME"), () => "")
+      const homeDirectory = Option.getOrElse(home, () => fallback)
+      if (homeDirectory === "") return yield* new InstallError({ message: "Set HOME or pass --home." })
+      const steps = yield* installer({ root, home: homeDirectory, dryRun, uninstall })
+      const selected = agents.includes("all") ? AGENTS : AGENTS.filter((agent) => agents.includes(agent))
+      for (const agent of selected) {
+        yield* Console.log(`== ${agent}`)
+        yield* steps[agent]
+      }
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.andThen(Console.error(error.message), Effect.sync(() => void (process.exitCode = 1)))
+      )
+    )
+
+const params = {
+  agents: Argument.Literals("agent", ["all", ...AGENTS]).pipe(
+    Argument.variadic({ min: 1 }),
+    Argument.withDescription("Agents to set up: claude, codex, opencode, pi, omp, or all")
+  ),
+  dryRun: Flag.Boolean("dry-run").pipe(Flag.withDescription("Print every change without making it"), Flag.withDefault(false)),
+  home: Flag.String("home").pipe(Flag.withDescription("Home directory to install into (default: $HOME)"), Flag.optional)
+}
+
+export const installCommand = Command.make("install", params, run(false)).pipe(
+  Command.withDescription("Install Learnt into the named agents, backing up anything it replaces")
+)
+
+export const uninstallCommand = Command.make("uninstall", params, run(true)).pipe(
+  Command.withDescription("Remove Learnt from the named agents, backing up anything it removes")
 )

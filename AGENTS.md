@@ -10,11 +10,13 @@ skills. See `README.md` for the full picture.
 
 - `src/` — the logic, written with Effect 4. Review and edit this, never the bundles.
 - `skills/learnt/scripts/learnt.mjs`, `adapters/pi/learnt.js`,
-  `adapters/opencode/learnt.js` — generated bundles, committed. Rebuild, don't hand-edit.
+  `adapters/opencode/learnt.js` — generated bundles, committed so users need
+  only Node. Rebuild, don't hand-edit. `learnt.mjs` is the `learnt` CLI
+  (`package.json` `bin`), built with `effect/cli`.
 - `skills/` — Agent Skills (`SKILL.md`). Guides are terse for agents; text the
   operator sees must stay plain and clear.
 - `.claude-plugin/`, `hooks/hooks.json` — Claude Code plugin and marketplace.
-- `src/install.ts` — per-agent installer.
+- `src/install.ts` — per-agent installer: `learnt install` and `learnt uninstall`.
 
 ## Commands
 
@@ -26,7 +28,7 @@ bun install            # dev dependencies
 bun run typecheck      # tsc --noEmit
 bun run build          # regenerate the three bundles from src/
 bun test
-bun run check          # typecheck + build + bundle drift check + tests
+bun run check          # audit + typecheck + build + bundle drift check + tests
 claude plugin validate .claude-plugin/plugin.json
 claude plugin validate .claude-plugin/marketplace.json
 ```

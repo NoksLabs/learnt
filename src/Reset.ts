@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto"
-import * as path from "node:path"
-import { Data, Effect } from "effect"
+import { Crypto, Data, Effect, Path } from "effect"
+import { Hex } from "effect/encoding"
 import { Files } from "./Files.ts"
 import { absoluteDirectory, CURRICULUM, JOURNAL, NOTES, OPERATOR, stateDirectory, SYSTEM } from "./State.ts"
 
@@ -50,6 +49,8 @@ export type ResetResult =
 const snapshot = (cwd: string, scope: Scope) =>
   Effect.gen(function*() {
     const files = yield* Files
+    const path = yield* Path.Path
+    const crypto = yield* Crypto.Crypto
     const state = yield* stateDirectory(cwd)
     if (state === undefined) return undefined
     const notes = new Map<string, Uint8Array>()
@@ -62,18 +63,20 @@ const snapshot = (cwd: string, scope: Scope) =>
       }
       notes.set(name, yield* files.readBytes(note))
     }
-    const digest = createHash("sha256").update(JSON.stringify([state, scope]))
+    let digest = JSON.stringify([state, scope])
     for (const name of NOTES) {
       const data = notes.get(name)
-      digest.update(JSON.stringify([name, data === undefined ? null : Buffer.from(data).toString("hex")]))
+      digest += JSON.stringify([name, data === undefined ? null : Hex.encode(data)])
     }
-    return { state, notes, fingerprint: digest.digest("hex") }
+    const fingerprint = yield* Effect.orDie(crypto.digest("SHA-256", new TextEncoder().encode(digest)))
+    return { state, notes, fingerprint: Hex.encode(fingerprint) }
   })
 
 export const reset = (rawCwd: string, scope: Scope, confirmation?: string) =>
   Effect.gen(function*() {
     const files = yield* Files
-    const cwd = absoluteDirectory(rawCwd)
+    const path = yield* Path.Path
+    const cwd = yield* absoluteDirectory(rawCwd)
     if (cwd === undefined) {
       return yield* new ResetError({ message: "Use an existing absolute project working directory." })
     }
@@ -106,7 +109,7 @@ export const reset = (rawCwd: string, scope: Scope, confirmation?: string) =>
     if (parentKind === "missing") yield* files.makeDirectory(backupParent, 0o700)
     const now = new Date().toISOString()
     const stamp = now.replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z")
-    const backup = yield* files.makeTempDirectory(path.join(backupParent, `${scope}-${stamp}-`))
+    const backup = yield* files.makeTempDirectory(backupParent, `${scope}-${stamp}-`)
     const replacements = fresh(scope, now.slice(0, 10), backup)
 
     yield* Effect.gen(function*() {

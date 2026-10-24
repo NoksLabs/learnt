@@ -27,10 +27,10 @@ validate:
     claude plugin validate skills
 
 install *agents:
-    bun src/install.ts "$@"
+    node skills/learnt/scripts/learnt.mjs install "$@"
 
 install-dry *agents:
-    bun src/install.ts --dry-run "$@"
+    node skills/learnt/scripts/learnt.mjs install --dry-run "$@"
 
 uninstall *agents:
-    bun src/install.ts --uninstall "$@"
+    node skills/learnt/scripts/learnt.mjs uninstall "$@"

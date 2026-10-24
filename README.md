@@ -11,16 +11,23 @@ Works with Claude Code, Codex, opencode, pi and omp.
 
 ## Quick start
 
-Needs [Bun](https://bun.sh) and [just](https://github.com/casey/just) to install,
-and Node.js 18+ on `PATH` at runtime.
+Needs Node.js 24.22.1+ (LTS) or 26.12.1+. Older releases miss the fix for the
+Brotli flaw CVE-2026-111497, and the installer refuses them.
 
 ```sh
 git clone https://github.com/NoksLabs/learnt.git ~/.local/share/learnt
-cd ~/.local/share/learnt
-just i
-just install-dry all      # preview changes
-just install claude       # or: codex opencode pi omp, or all
+npm install -g ~/.local/share/learnt   # puts `learnt` on PATH, linked to the clone
+learnt install --dry-run all           # preview changes
+learnt install claude                  # or: codex opencode pi omp, or all
 ```
+
+`learnt --help` lists every command; `learnt install --help` explains the flags.
+Update with `git -C ~/.local/share/learnt pull`, then run the same
+`learnt install` again. Remove with `learnt uninstall <agents>`, then
+`npm uninstall -g learnt`.
+
+Without the `learnt` command, run the bundle through Node instead:
+`node ~/.local/share/learnt/skills/learnt/scripts/learnt.mjs install claude`.
 
 Restart your agent, open a project, and run:
 
@@ -33,7 +40,8 @@ Restart your agent, open a project, and run:
 
 Learnt only starts when you run that command. It never switches itself on.
 
-Claude Code only, without cloning (needs read access to this repo):
+Claude Code only, without the CLI (needs read access to this repo). Pass a
+local checkout path instead of `NoksLabs/learnt` to use your clone:
 
 ```sh
 claude plugin marketplace add NoksLabs/learnt
@@ -126,11 +134,11 @@ question per track, set in your own system.
 | pi | `pi install` this folder | Named prompt section, every turn |
 | omp | `omp plugin link` this folder | Prompt append, every turn |
 
-`just uninstall <agents>` reverses an install. The installer backs up config
-files to `~/.learnt-install-backups/<time>/` before changing them.
+`learnt uninstall <agents>` reverses an install. The installer backs up config files to `~/.learnt-install-backups/<time>/` before
+changing them.
 
 - **Codex:** trust the hook in `/hooks`. Codex uses copies of the skills, so run
-  `just install codex` again after rebuilding. To get pickers in Default mode, set
+  `learnt install codex` again after updating. To get pickers in Default mode, set
   `[features] default_mode_request_user_input = true` in `~/.codex/config.toml`.
 - **pi:** has no picker tool, so choices come as numbered text.
 

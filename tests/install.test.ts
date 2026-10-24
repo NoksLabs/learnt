@@ -11,14 +11,16 @@ beforeEach(() => {
   fs.mkdirSync(home)
 })
 
-const install = (...args: Array<string>) => {
+const learnt = (command: "install" | "uninstall", ...args: Array<string>) => {
   const env = { ...process.env }
   delete env.CODEX_HOME
   delete env.XDG_CONFIG_HOME
-  const result = spawnSync("bun", [path.join(ROOT, "src/install.ts"), "--home", home, ...args], { encoding: "utf8", env })
+  const result = spawnSync("node", [CLI, command, "--home", home, ...args], { encoding: "utf8", env })
   expect(result.status).toBe(0)
   return result
 }
+const install = (...args: Array<string>) => learnt("install", ...args)
+const uninstall = (...args: Array<string>) => learnt("uninstall", ...args)
 
 describe("installer", () => {
   test("Codex install keeps the operator's other hooks and running it twice adds one entry", () => {
@@ -47,7 +49,7 @@ describe("installer", () => {
     const other = { hooks: [{ type: "command", command: "bash other.sh" }] }
     write(hooks, JSON.stringify({ hooks: { SessionStart: [other] } }))
     install("codex")
-    install("--uninstall", "codex")
+    uninstall("codex")
     expect(JSON.parse(read(hooks)).hooks.SessionStart).toEqual([other])
     expect(fs.existsSync(path.join(home, ".codex/skills/learnt"))).toBe(false)
     expect(fs.existsSync(path.join(home, ".learnt-install-backups"))).toBe(true)
@@ -63,7 +65,7 @@ describe("installer", () => {
       expect(command).toContain(path.join(ROOT, `skills/${name}/SKILL.md`))
       expect(command).not.toContain("{{")
     }
-    install("--uninstall", "opencode")
+    uninstall("opencode")
     expect(fs.existsSync(plugin)).toBe(false)
   })
 

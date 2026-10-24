@@ -1,7 +1,4 @@
-import * as fs from "node:fs"
-import * as os from "node:os"
-import * as path from "node:path"
-import { Context, Effect, Option } from "effect"
+import { Config, Effect, FileSystem, Option, Path } from "effect"
 import { Files } from "./Files.ts"
 import { Git } from "./Git.ts"
 
@@ -12,21 +9,16 @@ export const JOURNAL = "journal.md"
 export const SYSTEM = "system.md"
 export const NOTES = [OPERATOR, CURRICULUM, JOURNAL, SYSTEM] as const
 
-export const Home = Context.Reference<string>("learnt/Home", {
-  defaultValue: () => os.homedir()
-})
+export const absoluteDirectory = (raw: unknown) =>
+  Effect.gen(function*() {
+    const fs = yield* FileSystem.FileSystem
+    const path = yield* Path.Path
+    if (typeof raw !== "string" || raw === "" || !path.isAbsolute(raw)) return undefined
+    const real = yield* fs.realPath(raw)
+    return (yield* fs.stat(real)).type === "Directory" ? real : undefined
+  }).pipe(Effect.orElseSucceed(() => undefined))
 
-export const absoluteDirectory = (raw: unknown): string | undefined => {
-  if (typeof raw !== "string" || raw === "" || !path.isAbsolute(raw)) return undefined
-  try {
-    const real = fs.realpathSync(raw)
-    return fs.statSync(real).isDirectory() ? real : undefined
-  } catch {
-    return undefined
-  }
-}
-
-const ancestors = (directory: string): Array<string> => {
+const ancestors = (path: Path.Path, directory: string): Array<string> => {
   const chain = [directory]
   for (let parent = path.dirname(directory); parent !== chain.at(-1); parent = path.dirname(parent)) {
     chain.push(parent)
@@ -37,8 +29,10 @@ const ancestors = (directory: string): Array<string> => {
 export const searchRoots = (cwd: string) =>
   Effect.gen(function*() {
     const files = yield* Files
-    const home = absoluteDirectory(yield* Home) ?? (yield* Home)
-    const chain = ancestors(cwd)
+    const path = yield* Path.Path
+    const rawHome = yield* Effect.orElseSucceed(Config.String("HOME"), () => "")
+    const home = (yield* absoluteDirectory(rawHome)) ?? rawHome
+    const chain = ancestors(path, cwd)
     for (const [index, directory] of chain.entries()) {
       if (yield* files.exists(path.join(directory, ".git"))) return chain.slice(0, index + 1)
     }
@@ -49,6 +43,7 @@ export const searchRoots = (cwd: string) =>
 export const stateDirectory = (cwd: string) =>
   Effect.gen(function*() {
     const files = yield* Files
+    const path = yield* Path.Path
     for (const directory of yield* searchRoots(cwd)) {
       const state = path.join(directory, STATE_NAME)
       const kind = yield* files.kind(state)
@@ -74,6 +69,7 @@ export const operatorIsActive = (operator: string) =>
 
 export const notesTracked = (state: string) =>
   Effect.gen(function*() {
+    const path = yield* Path.Path
     const git = yield* Git
     return yield* git.tracks(path.dirname(state), path.basename(state))
   })
@@ -81,6 +77,7 @@ export const notesTracked = (state: string) =>
 export const defaultLocation = (cwd: string) =>
   Effect.gen(function*() {
     const files = yield* Files
+    const path = yield* Path.Path
     const roots = yield* searchRoots(cwd)
     const last = roots.at(-1) ?? cwd
     return (yield* files.exists(path.join(last, ".git"))) ? last : cwd
@@ -92,6 +89,7 @@ export type Status =
 
 export const status = (cwd: string) =>
   Effect.gen(function*() {
+    const path = yield* Path.Path
     const state = yield* stateDirectory(cwd)
     if (state === undefined) {
       return { state: null, create_at: path.join(yield* defaultLocation(cwd), STATE_NAME) } satisfies Status
@@ -105,6 +103,7 @@ export const status = (cwd: string) =>
 
 export const context = (cwd: string, guide: string) =>
   Effect.gen(function*() {
+    const path = yield* Path.Path
     const state = yield* stateDirectory(cwd)
     if (state === undefined || !(yield* operatorIsActive(path.join(state, OPERATOR)))) return undefined
     if (yield* notesTracked(state)) {

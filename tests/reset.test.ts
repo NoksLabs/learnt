@@ -18,7 +18,7 @@ beforeEach(() => {
 
 type Run = (cwd: string, scope: Scope, confirmation?: string) => Promise<any>
 const runWith = (layer: Layer.Layer<Files>): Run => (cwd, scope, confirmation) =>
-  Effect.runPromise(reset(cwd, scope, confirmation).pipe(Effect.provide(layer)))
+  Effect.runPromise(reset(cwd, scope, confirmation).pipe(Effect.provide(layer), Effect.provide(Live)))
 const run = runWith(Live)
 const confirm = async (scope: Scope, cwd = project, runner: Run = run) =>
   runner(cwd, scope, (await run(cwd, scope)).confirmation)
@@ -29,7 +29,7 @@ const unchanged = (state: string, names = Object.keys(NOTE_TEXT)) => {
 
 const liveFiles = Effect.runSync(Effect.gen(function*() {
   return yield* Files
-}).pipe(Effect.provide(Files.layer)))
+}).pipe(Effect.provide(Live)))
 const failing = (override: Partial<Files["Service"]>) => Layer.succeed(Files, Files.of({ ...liveFiles, ...override }))
 
 describe("scopes reset only what the operator chose", () => {

@@ -1,16 +1,13 @@
-import { realpathSync } from "node:fs"
-import * as path from "node:path"
-import { fileURLToPath } from "node:url"
 import { Effect } from "effect"
-import { Live } from "./Live.ts"
+import { besideBundle, Live } from "./Live.ts"
 import { context } from "./State.ts"
 
-const GUIDE = path.join(
-  path.dirname(realpathSync(fileURLToPath(import.meta.url))), "..", "..", "skills", "learnt", "SKILL.md"
-)
-
 const restoration = (cwd: string) =>
-  Effect.runPromise(context(cwd, GUIDE).pipe(Effect.provide(Live), Effect.orElseSucceed(() => undefined)))
+  Effect.runPromise(besideBundle("..", "..", "skills", "learnt", "SKILL.md").pipe(
+    Effect.flatMap((guide) => context(cwd, guide)),
+    Effect.provide(Live),
+    Effect.orElseSucceed(() => undefined)
+  ))
 
 interface BeforeAgentStart {
   systemPrompt?: string | Array<string>
